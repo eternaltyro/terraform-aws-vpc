@@ -68,6 +68,19 @@ $ terraform init
 $ terraform plan
 ```
 
+## Inputs
+
+1. `vpc_name` (string) - Name of the VPC; defaults to empty string.
+2. `enable_ipv6` (bool) - IPv6 for the VPC; defaults to `true`
+3. `public_subnet_auto_assign_public_ipv4` - defaults to `false`
+4. `public_subnet_enable_ipv6` - defaults to `false`
+5. `public_subnet_enable_ipv6_only` - Make public subnet IPv6-native; defaults to `false`
+6. `public_subnet_auto_assign_ipv6` - Auto-assign IPv6 to ENI; defaults to `true`
+7. `public_subnet_enable_dns64` - defaults to `true`
+8. :warning: - prepend all the above with `private_subnet...` for Private subnet settings
+
+IPv6 settings are logical AND'ed so that ipv6 settings are sane. For example when you set `enable_ipv6` to false other ipv6 settings do not take effect.
+
 ## Outputs
 
 1. `vpc_id` - VPC ID
@@ -76,6 +89,7 @@ $ terraform plan
 4. `ipv6-only_subnets` - A list of private subnet IDs
 5. `ipv4_prefix_list_id` - ID of the prefix list for IPv4 addresses
 6. `ipv6_prefix_list_id` - ID of the prefix list for IPv6 addresses
+7. `default_security_group_id` - ID of the default VPC security group
 
 ## Variables
 
