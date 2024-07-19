@@ -9,31 +9,79 @@ variable "aws_rfc1918" {
   ]
 }
 
-variable "project_meta" {
-  description = "Metadata relating to the project for which the VPC is being created"
-  type = object({
-    name       = string
-    short_name = string
-    version    = string
-    url        = string
-  })
-}
-
-variable "deployment_environment" {
-  description = "Deployment flavour or variant identified by this name"
+variable "vpc_name" {
+  description = "Name of the VPC used for Resource tags"
   type        = string
+  default     = ""
 }
 
-variable "default_tags" {
-  description = "Default resource tags to apply to AWS resources"
-  type        = map(string)
+# -- VPC Defaults
+variable "enable_ipv6" {
+  description = "Do you want to enable IPv6 on the VPC?"
+  type        = bool
+  default     = true
+}
 
-  default = {
-    project        = null
-    maintainer     = null
-    documentation  = null
-    cost_center    = null
-    IaC_Management = "Terraform"
-  }
+# -- Public Subnet Defaults
+variable "public_subnet_auto_assign_public_ipv4" {
+  description = "Do you want to enable public subnet IPv6?"
+  type        = bool
+  default     = false
+}
+
+variable "public_subnet_enable_ipv6" {
+  description = "Do you want to enable public subnet IPv6?"
+  type        = bool
+  default     = false
+}
+
+variable "public_subnet_ipv6_only" {
+  description = "Do you want to make public subnet IPv6-only?"
+  type        = bool
+  default     = false
+}
+
+variable "public_subnet_auto_assign_ipv6" {
+  description = "Do you want to automatically assign IPv6 address to network interfaces?"
+  type        = bool
+  default     = true
+}
+
+variable "public_subnet_enable_dns64" {
+  description = "Do you want to enable DNS64 in public subnet?"
+  type        = bool
+  default     = true
+}
+
+# -- Private Subnet Defaults
+variable "private_subnet_enable_ipv6" {
+  description = "Do you want to enable private subnet IPv6?"
+  type        = bool
+  default     = false
+}
+
+variable "private_subnet_ipv6_only" {
+  description = "Do you want to make private subnet IPv6-only?"
+  type        = bool
+  default     = false
+}
+
+variable "private_subnet_auto_assign_ipv6" {
+  description = "Do you want to automatically assign IPv6 address to network interfaces?"
+  type        = bool
+  default     = true
+}
+
+variable "private_subnet_enable_dns64" {
+  description = "Do you want to enable DNS64?"
+  type        = bool
+  default     = true
+}
+
+# -- IPv6 Native Subnet Defaults
+variable "enable_ipv6_only_subnets" {
+  description = "Do you want IPv6-only subnet?"
+  type        = bool
+  default     = true
 }
 

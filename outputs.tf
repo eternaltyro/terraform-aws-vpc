@@ -16,6 +16,12 @@ output "private_subnets" {
   description = "List of public subnet IDs"
 }
 
+output "ipv6_only_subnets" {
+  value = [for subnet in aws_subnet.ipv6-only : subnet.id]
+
+  description = "List of public subnet IDs"
+}
+
 output "ipv4_prefix_list_id" {
   value = aws_ec2_managed_prefix_list.admin-v4.id
 

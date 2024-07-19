@@ -2,89 +2,100 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+locals {
+  az_count = length(data.aws_availability_zones.available.names)
+}
+
 resource "aws_vpc" "primary" {
   cidr_block                       = element(var.aws_rfc1918, 1)
-  assign_generated_ipv6_cidr_block = true
+  assign_generated_ipv6_cidr_block = var.enable_ipv6
 
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   tags = {
-    Name = join("-", [
-      lookup(var.project_meta, "short_name"),
-      var.deployment_environment
-      ]
-    )
+    Name = var.vpc_name
   }
 }
 
-locals {
-  az_indexed_map = { for idx, val in data.aws_availability_zones.available.names : idx => val }
-  az_count       = length(data.aws_availability_zones.available.names)
-}
-
 resource "aws_subnet" "public" {
-  for_each          = local.az_indexed_map
+  count = local.az_count
+
   vpc_id            = aws_vpc.primary.id
-  availability_zone = each.value
+  availability_zone = element(data.aws_availability_zones.available.names, count.index)
 
-  map_public_ip_on_launch         = false
-  ipv6_native                     = false
-  assign_ipv6_address_on_creation = true
-  enable_dns64                    = true
+  # -- Addressing: IPv4
+  cidr_block              = cidrsubnet(aws_vpc.primary.cidr_block, 8, count.index)
+  map_public_ip_on_launch = var.public_subnet_auto_assign_public_ipv4
 
-  cidr_block = cidrsubnet(
-    aws_vpc.primary.cidr_block, 8, each.key
+  # -- Addressing: IPv6
+  ipv6_cidr_block = (
+    var.enable_ipv6 && var.public_subnet_enable_ipv6
+    ? cidrsubnet(aws_vpc.primary.ipv6_cidr_block, 8, count.index) : null
   )
 
-  ipv6_cidr_block = cidrsubnet(
-    aws_vpc.primary.ipv6_cidr_block, 8, each.key
+  ipv6_native = (var.enable_ipv6 && var.public_subnet_enable_ipv6 && var.public_subnet_ipv6_only)
+
+  assign_ipv6_address_on_creation = (
+    var.enable_ipv6
+    && var.public_subnet_enable_ipv6
+    && var.public_subnet_auto_assign_ipv6
   )
+
+  # -- DNS & Hostnames
+  enable_dns64 = (var.enable_ipv6 && var.public_subnet_enable_ipv6 && var.public_subnet_enable_dns64)
 
   tags = {
-    Name = join("-", ["public", each.value])
+    Name = join("-", ["public", count.index])
   }
 }
 
 resource "aws_subnet" "private" {
-  for_each          = local.az_indexed_map
+  count = local.az_count
+
   vpc_id            = aws_vpc.primary.id
-  availability_zone = each.value
+  availability_zone = element(data.aws_availability_zones.available.names, count.index)
 
-  map_public_ip_on_launch         = false
-  ipv6_native                     = false
-  assign_ipv6_address_on_creation = true
-  enable_dns64                    = true
+  # -- Addressing: IPv4
+  cidr_block              = cidrsubnet(aws_vpc.primary.cidr_block, 8, count.index + local.az_count)
+  map_public_ip_on_launch = var.public_subnet_auto_assign_public_ipv4
 
-  cidr_block = cidrsubnet(
-    aws_vpc.primary.cidr_block, 8, each.key + local.az_count
+  # -- Addressing: IPv6
+  ipv6_native = (var.enable_ipv6 && var.private_subnet_enable_ipv6 && var.private_subnet_ipv6_only)
+
+  ipv6_cidr_block = (
+    var.enable_ipv6 && var.private_subnet_enable_ipv6
+    ? cidrsubnet(aws_vpc.primary.ipv6_cidr_block, 8, count.index + local.az_count) : null
   )
 
-  ipv6_cidr_block = cidrsubnet(
-    aws_vpc.primary.ipv6_cidr_block, 8, each.key + local.az_count
-  )
+  # -- DNS & Hostnames
+  enable_dns64 = (var.enable_ipv6 && var.public_subnet_enable_ipv6 && var.public_subnet_enable_dns64)
 
   tags = {
-    Name = join("-", ["Private", each.value])
+    Name = join("-", ["Private", count.index])
   }
 }
 
 resource "aws_subnet" "ipv6-only" {
-  for_each          = local.az_indexed_map
-  vpc_id            = aws_vpc.primary.id
-  availability_zone = each.value
+  count = local.az_count
 
-  ipv6_native                                    = true
-  assign_ipv6_address_on_creation                = true
+  vpc_id            = aws_vpc.primary.id
+  availability_zone = element(data.aws_availability_zones.available.names, count.index)
+
+  # -- Addressing: IPv4
+
+  # -- Addressing: IPv6
+  ipv6_cidr_block = cidrsubnet(aws_vpc.primary.ipv6_cidr_block, 8, count.index + (local.az_count * 2))
+
+  ipv6_native                     = true
+  assign_ipv6_address_on_creation = true
+
+  # -- DNS & Hostnames
   enable_dns64                                   = true
   enable_resource_name_dns_aaaa_record_on_launch = true
 
-  ipv6_cidr_block = cidrsubnet(
-    aws_vpc.primary.ipv6_cidr_block, 8, each.key + (local.az_count * 2)
-  )
-
   tags = {
-    Name = join("-", ["IPv6-only", each.value])
+    Name = join("-", ["IPv6-only", count.index])
   }
 }
 
@@ -98,7 +109,7 @@ resource "aws_internet_gateway" "igw" {
 
 resource "aws_nat_gateway" "ngw" {
   allocation_id = aws_eip.ngw.allocation_id
-  subnet_id     = aws_subnet.public[1].id
+  subnet_id     = element(aws_subnet.public[*].id, 1)
 
   depends_on = [
     aws_internet_gateway.igw
@@ -155,11 +166,22 @@ resource "aws_route_table" "private" {
   }
 }
 
-// NOTE: See why this is necessary in the comment below
-locals {
-  private_subnets   = [for subnet in aws_subnet.private : subnet.id]
-  public_subnets    = [for subnet in aws_subnet.public : subnet.id]
-  ipv6_only_subnets = [for subnet in aws_subnet.ipv6-only : subnet.id]
+resource "aws_route_table" "ipv6-only" {
+  vpc_id = aws_vpc.primary.id
+
+  route {
+    ipv6_cidr_block        = "::/0"
+    egress_only_gateway_id = aws_egress_only_internet_gateway.eigw.id
+  }
+
+  route {
+    ipv6_cidr_block = "64:ff9b::/96"
+    nat_gateway_id  = aws_nat_gateway.ngw.id
+  }
+
+  tags = {
+    Name = "IPv6-native Routes"
+  }
 }
 
 // NOTE: We could in theory have the following in place
@@ -170,19 +192,19 @@ locals {
 //   know to create a faux static each.key and an apply-time each.value
 //
 resource "aws_route_table_association" "private" {
-  for_each       = zipmap(range(local.az_count), local.private_subnets)
+  for_each       = zipmap(range(local.az_count), aws_subnet.private[*].id)
   subnet_id      = each.value
   route_table_id = aws_route_table.private.id
 }
 
 resource "aws_route_table_association" "ipv6-only" {
-  for_each       = zipmap(range(local.az_count), local.ipv6_only_subnets)
+  for_each       = zipmap(range(local.az_count), aws_subnet.ipv6-only[*].id)
   subnet_id      = each.value
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.ipv6-only.id
 }
 
 resource "aws_route_table_association" "public" {
-  for_each       = zipmap(range(local.az_count), local.public_subnets)
+  for_each       = zipmap(range(local.az_count), aws_subnet.public[*].id)
   subnet_id      = each.value
   route_table_id = aws_route_table.public.id
 }
