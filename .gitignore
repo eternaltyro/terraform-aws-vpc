@@ -33,3 +33,5 @@ override.tf.json
 .terraformrc
 terraform.rc
 
+# Ignore KATE temporary files
+*.kate-swp

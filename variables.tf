@@ -1,4 +1,4 @@
-variable "aws_rfc1918" {
+variable "vpc_cidr_allow_list" {
   description = "Modified RFC 1918 CIDR with AWS minimum /16 prefixes"
   type        = list(string)
 

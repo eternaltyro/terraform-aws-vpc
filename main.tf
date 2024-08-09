@@ -7,7 +7,7 @@ locals {
 }
 
 resource "aws_vpc" "primary" {
-  cidr_block                       = element(var.aws_rfc1918, 1)
+  cidr_block                       = element(var.vpc_cidr_allow_list, 1)
   assign_generated_ipv6_cidr_block = var.enable_ipv6
 
   enable_dns_support   = true
@@ -233,37 +233,7 @@ resource "aws_ec2_managed_prefix_list" "admin-v6" {
   }
 }
 
+# -- Remove all rules from the default security group.
 resource "aws_default_security_group" "default" {
   vpc_id = aws_vpc.primary.id
-
-  ingress {
-    protocol  = -1
-    self      = true
-    from_port = 0
-    to_port   = 0
-  }
-
-  ingress {
-    description = "Allow SSH access from user-managed prefix-lists"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    prefix_list_ids = [
-      aws_ec2_managed_prefix_list.admin-v4.id,
-      aws_ec2_managed_prefix_list.admin-v6.id
-    ]
-  }
-
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  depends_on = [
-    aws_ec2_managed_prefix_list.admin-v4,
-    aws_ec2_managed_prefix_list.admin-v6
-  ]
 }
